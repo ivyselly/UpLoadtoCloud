@@ -1,14 +1,91 @@
-#! /bin/bash
+#!/bin/bash
 
 setup() { 
-    # Install az cli
-    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+    if az account show &> /dev/null; then
+    echo "You are already logged in."
+    else
     # Login
-    az login --use-device-code
+    az login --scope https://management.core.windows.net//.default
     echo "You're logged in."
+    fi
+    
 }
 
 copy_file() {
 
+    echo "please endter the path to target file :" 
+    read targetpath
+    storage_array=($( az storage account list --query '[].name' --output tsv))
+        if [[ ${#storage_array[@]} -eq 1 ]]; then
+            storageAccount=${storage_array[0]}
+        fi
+
+        if [[ ${#storage_array[@]} -eq 0 ]]; then
+            echo "You don't have a storage account, please create one to upload files!!"
+            exit 1  # Exit with a non-zero status to indicate an error
+
+        else
+            for i in "${storage_array[@]}"; do
+            echo "$i"
+            done
+        read -p "Please choose a storage account via a number : " mynum
+        
+        while [[ $mynum -lt 1 ]] || [[ $mynum -gt ${#storage_array[@]} ]]; do
+            echo "please enter a valid number :"
+            read mynum
+        done   
+
+        mynum=$((mynum-1))
+        storageAccount=${storage_array[$mynum]}
+        fi
+
+    #get resource group and keys
+    account_info=$(az storage account show --name "$storageAccount")
+    resourceGroup=$(echo "$account_info" | jq -r '.resourceGroup')
+
+    
+    accountKey=$(az storage account keys list --resource-group $resourceGroup --account-name $storageAccount --query "[0].value" -o tsv)
+
+
+    #get or create container for files
+    container=$(az storage container list --account-name $storageAccount --account-key $accountKey --query "[].name" -o tsv)
+    if [[ -z "$container" ]]; then
+        echo "you have no containers, please create one"
+    fi
+    echo "resourcegroup is $resourceGroup , account Key is $accountKey , containers are $container"
+
+   #installing azcopy
+    if [ ! -f "$azcopy_path" ]; then
+    echo "AzCopy not found. Installing..."
+    wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux
+    tar -xf azcopy.tar.gz --strip-components=1 --wildcards '*/azcopy'
+    rm azcopy.tar.gz
+    chmod +x ./azcopy
+    azcopy_path="./azcopy"
+   fi
+
+   if [ -f "$azcopy_path" ]; then
+    tenantId=$(az account show --query tenantId --output tsv)
+    $azcopy_path login --tenant-id $tenantId
+    $azcopy_path copy "$targetpath" 'https://cs11003200233960b06.blob.core.windows.net/mycontain1'
+   else
+    echo "Error: AzCopy not found or failed to install."
+   fi
+    #echo "the file has been copied"
 
 }
+
+
+#azcopy make “https://<azure storage account name>.blob.core.windows.net/<container>” - #azcopy command to create container
+# Install az cli
+    if command -v az &> /dev/null; then
+        setup
+
+    else
+        echo "Azure CLI is not installed, installing....."
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        setup
+    fi
+copy_file
+
+#copy_file() {
