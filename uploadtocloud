@@ -13,7 +13,7 @@ setup() {
 
 copy_file() {
 
-    echo "please endter the path to target file :" 
+    echo "please enter the path to target file :" 
     read targetpath
     storage_array=($( az storage account list --query '[].name' --output tsv))
         if [[ ${#storage_array[@]} -eq 1 ]]; then
@@ -54,24 +54,50 @@ copy_file() {
     fi
     echo "resourcegroup is $resourceGroup , account Key is $accountKey , containers are $container"
 
-   #installing azcopy
-    if [ ! -f "$azcopy_path" ]; then
-    echo "AzCopy not found. Installing..."
-    wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux
-    tar -xf azcopy.tar.gz --strip-components=1 --wildcards '*/azcopy'
-    rm azcopy.tar.gz
-    chmod +x ./azcopy
-    azcopy_path="./azcopy"
-   fi
+    #check if file already exists
+    echo "please enter name for blob :" 
+    read blob_name
 
-   if [ -f "$azcopy_path" ]; then
-    tenantId=$(az account show --query tenantId --output tsv)
-    $azcopy_path login --tenant-id $tenantId
-    $azcopy_path copy "$targetpath" 'https://cs11003200233960b06.blob.core.windows.net/mycontain1'
-   else
-    echo "Error: AzCopy not found or failed to install."
-   fi
-    #echo "the file has been copied"
+    existing_blob=$(az storage blob exists --account-name $storageAccount --account-key $accountKey --container-name $container --name $blob_name --output tsv)
+
+    if [ "$existing_blob" == "True" ]; then
+    
+        # Handle synchronization (prompt user to overwrite, skip, or rename)
+        echo "File $blob_name already exists in the cloud."
+        read -p "Do you want to overwrite, skip, or rename? (o/s/r): " choice
+
+        case $choice in
+            o)
+                echo "Overwriting the existing file..."
+                az storage blob upload --account-name $storageAccount --account-key $accountKey --container-name $container --file $targetpath --name $blob_name --overwrite "true"
+                if [ $? -eq 0 ]; then
+                echo "The file has been successfully uploaded."
+                else
+                error_message=$(az storage blob upload --account-name $storageAccount --account-key $accountKey --container-name $container --file $targetpath --name myblob 2>&1)
+                echo "Error uploading the file: $error_message"
+                fi
+                ;;
+            s)
+                echo "Skipping the file..."
+                return
+                ;;
+            r)
+                read -p "Enter a new name for the file: " new_name
+                blob_name=$new_name
+                echo "Renaming the file to $blob_name..."
+                az storage blob upload --account-name $storageAccount --account-key $accountKey --container-name $container --file $targetpath --name $blob_name
+
+                ;;
+            *)
+                echo "Invalid choice. Skipping the file..."
+                return
+                ;;
+        esac
+    else
+        echo "uploading the file.. "
+        az storage blob upload --account-name $storageAccount --account-key $accountKey --container-name $container --file $targetpath --name $blob_name
+    fi
+
 
 }
 
