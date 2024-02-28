@@ -36,7 +36,7 @@ copy_file() {
         mynum=$((mynum-1))
         storageAccount=${storage_array[$mynum]}
         fi
-
+    echo "my storage account is $storageAccount "
     #get resource group and keys
     account_info=$(az storage account show --name "$storageAccount")
     resourceGroup=$(echo "$account_info" | jq -r '.resourceGroup')
@@ -57,7 +57,7 @@ copy_file() {
     echo " how many files do you want to upload ? :"
     read numfiles
 
-    if [[ "&numfiles" -eq 1 ]]; then
+    if [[ "$numfiles" -eq 1 ]]; then
 
         echo "please enter the path to target file :" 
         read targetpath
@@ -119,8 +119,10 @@ copy_file() {
         else
         echo "enter pattern [eg *.txt]"
         read pattern
+        echo "enter the path to the directory"
+        read dirpath
         echo "uploading the file.. "
-        az storage blob upload-batch -d $container -s $dirpath --account-name $storageAccount --account-key $accountKey --container-name --pattern "*.py"
+        az storage blob upload-batch -d $container -s $dirpath --account-name $storageAccount --account-key $accountKey --pattern $pattern
         fi
     fi
 
@@ -139,5 +141,3 @@ copy_file() {
         setup
     fi
 copy_file
-
-#copy_file() {
